@@ -24,8 +24,7 @@ from kivy.animation import Animation
 
 import argparse, hashlib, json, sys, os
 
-from urllib2 import quote, urlopen
-from urllib import urlretrieve
+from urllib.request import quote,Request, urlopen, urlretrieve
 
 
 
@@ -78,10 +77,10 @@ class APIPost(object):
         if not link:
             return
 
-        if 'http://' in link[0]:
+        if 'https://' in link[0]:
             link = link[0]
         else:
-            link = "http://"+self.domain + link[0]
+            link = "https://"+self.domain + link[0]
 
         return link
 
@@ -204,7 +203,7 @@ class Picture(Scatter):
                 pass
             
             if self.post.local_files[image_type]:
-                Logger.warn( "Caching found of %d."%(self.post.index,))
+                Logger.warning( "Caching found of %d."%(self.post.index,))
                 self.source = dest
                 return           
             
@@ -212,7 +211,7 @@ class Picture(Scatter):
                 bin = f.read()
     
             if post.md5 == hashlib.md5(bin).hexdigest():
-                Logger.warn( "md5 correct found of %d: %s."%(self.post.index,dest))
+                Logger.warning( "md5 correct found of %d: %s."%(self.post.index,dest))
                 self.post.local_files[image_type]=True
                 self.source = dest
                 return 
@@ -221,9 +220,9 @@ class Picture(Scatter):
             pass
         url = post.get_url(image_type)
         if not url:
-            Logger.warn('invalid')
+            Logger.warning('invalid')
             return
-        Logger.warn('downloading ')
+        Logger.info('Downloading: ' + url)
         self.downloader= Downloader(url,dest,self.download_complete, self.download_progress)
         self.downloader.start()
         
@@ -231,8 +230,8 @@ class Picture(Scatter):
         progress = int(count * blockSize * 100 / totalSize)
         progress = min(100, progress)
         if count * blockSize == totalSize:
-            Logger.warn("Total ok!")
-        Logger.warn( '%s%%' % (progress,))
+            Logger.warning("Total ok!")
+        Logger.warning( '%s%%' % (progress,))
     
     def download_complete(self,dl,*k):
         self.source = dl.dest
@@ -259,24 +258,26 @@ class APIServer:
             tags = quote(' '.join(tags))
         else:
             tags = quote(tags)
-        dir= self.domain+'/post'
+        dir= self.domain+'/post/'
+        endpoint = "http://"+self.domain+"/post/index.json?"
         
         if not os.path.exists(dir):
             os.mkdir(dir)
         
-        query = '%s/index.json?tags=%s&page=%s&limit=%s' % (dir,tags, page, limit)
+        query = 'tags=%s&page=%s&limit=%s' % (tags, page, limit)
 
-        if os.path.isfile(query):
-            with open(query, 'rb') as f:
+        if os.path.isfile(dir+query):
+            with open(dir+query, 'rb') as f:
                 data = f.read()
             try:
                 return [self.get_post(x['id'],x) for x in json.loads(data)]
             except:
                 pass
-        
-        data = urlopen("http://" + query).read()
-        with open(query, 'wb') as f:
-            f.write(data)
+        Logger.info(endpoint+query)
+        req= Request(endpoint+query, headers = { 'User-Agent' : 'KivyTest/0.1 (by Arp on e621)' } )
+        data = urlopen(req).read()
+        with open(dir+query, 'wb') as f:
+            f.write(data) 
         return [self.get_post(x['id'],x) for x in json.loads(data)]
 
 class APIResultIterator:
@@ -331,7 +332,7 @@ class PicturesApp(App):
         for x in range(0,4):
             for y in range(0,3):
                 try:
-                    post=posts.next()
+                    post=next(posts)
                     # load the image
                     picture = Picture(post,(x*200+50,y*200+50),pos=(-1000,y*200+50), scale=0.1,  rotation=0 )
                     picture.back_animation.start(picture)
@@ -339,7 +340,7 @@ class PicturesApp(App):
                     # add to the main field
                     root.add_widget(picture)
                     self.pictures.append(picture)
-                except Exception, e:
+                except Exception as e:
                     Logger.exception('Pictures: Unable to load <%s>')
     
     def prev(self,*k):
@@ -362,7 +363,7 @@ class PicturesApp(App):
         for x in range(0,4):
             for y in range(0,3):
                 try:
-                    post=posts.next()
+                    post=next(posts)
                     # load the image
                     picture = Picture(post,(x*200+50,y*200+50),pos=(2000,y*200+50), scale=0.1,  rotation=0 )
                     picture.back_animation.start(picture)
@@ -370,7 +371,7 @@ class PicturesApp(App):
                     # add to the main field
                     root.add_widget(picture)
                     self.pictures.append(picture)
-                except Exception, e:
+                except Exception as e:
                     Logger.exception('Pictures: Unable to load <%s>')
     
     def picture_on_selected(self, instance, value):
